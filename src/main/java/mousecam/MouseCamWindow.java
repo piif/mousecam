@@ -17,11 +17,18 @@ import javax.swing.JPanel;
 import javax.swing.JSlider;
 import javax.swing.border.TitledBorder;
 
+@SuppressWarnings("serial")
 public class MouseCamWindow extends JFrame {
+
+	public static final boolean REVERSED = true;
+	public static final int VIEW_SIZE_X = 900;
+	public static final int VIEW_SIZE_Y = 900;
+	public static final int CAM_SIZE = 15;
 
     private PixelImagePanel currentImagePanel;
     private PixelImagePanel scanImagePanel;
-    private JComboBox portsList;
+    @SuppressWarnings("rawtypes")
+	private JComboBox portsList;
     private JButton connectButton;
     private JSlider slider;
     private JButton clearButton;
@@ -33,11 +40,12 @@ public class MouseCamWindow extends JFrame {
 
     public void setImageData( int x, int y, byte[] pixels ) {
         currentImagePanel.clearPixels();
-        currentImagePanel.setImageData( 0, 0, pixels, 16 );
-        scanImagePanel.setImageData( x, y, pixels, 16 );
+        currentImagePanel.setImageData( 0, 0, pixels, CAM_SIZE, REVERSED);
+        scanImagePanel.setImageData( x, y, pixels, CAM_SIZE, REVERSED );
     }
 
-    public void setSerialPortsList( List<String> serialPorts ) {
+    @SuppressWarnings({ "unchecked", "rawtypes" })
+	public void setSerialPortsList( List<String> serialPorts ) {
         portsList.setModel( new DefaultComboBoxModel( serialPorts.toArray() ) );
     }
 
@@ -65,7 +73,8 @@ public class MouseCamWindow extends JFrame {
         return scanImagePanel;
     }
 
-    private void initLayout() {
+    @SuppressWarnings("rawtypes")
+	private void initLayout() {
         setTitle( "Mouse cam" );
         setLayout( new GridBagLayout() );
 
@@ -91,7 +100,7 @@ public class MouseCamWindow extends JFrame {
 
         JPanel sliderPanel = new JPanel( new BorderLayout( 5, 0 ) );
         sliderPanel.setBorder( new TitledBorder( "Frame dump width" ) );
-        slider = new JSlider( 0, 16 );
+        slider = new JSlider( 0, CAM_SIZE );
         slider.setMinorTickSpacing( 1 );
         slider.setSnapToTicks( true );
         slider.setPaintTicks( true );
@@ -100,16 +109,16 @@ public class MouseCamWindow extends JFrame {
 
         getContentPane().add( sliderPanel, new GridBagConstraints( 0, 2, 1, 1, 0, 0, GridBagConstraints.PAGE_START, GridBagConstraints.HORIZONTAL, new Insets( 0, 0, 0, 0 ), 0, 0 ) );
 
-        currentImagePanel = new PixelImagePanel( 16, 16 );
-        currentImagePanel.setPreferredSize( new Dimension( 256, 256 ) );
+        currentImagePanel = new PixelImagePanel( CAM_SIZE, CAM_SIZE );
+        currentImagePanel.setPreferredSize( new Dimension( 225, 225 ) );
         JPanel currentPanel = new JPanel();
         currentPanel.setBorder( new TitledBorder( "Current sensor data" ) );
         currentPanel.add( currentImagePanel );
 
         getContentPane().add( currentPanel, new GridBagConstraints( 0, 3, 1, 1, 0, 0, GridBagConstraints.PAGE_START, GridBagConstraints.NONE, new Insets( 0, 0, 0, 0 ), 0, 0 ) );
 
-        scanImagePanel = new PixelImagePanel( 420, 420 );
-        scanImagePanel.setPreferredSize( new Dimension( 420, 420 ) );
+        scanImagePanel = new PixelImagePanel( VIEW_SIZE_X, VIEW_SIZE_Y );
+        scanImagePanel.setPreferredSize( new Dimension( VIEW_SIZE_X, VIEW_SIZE_Y ) );
         JPanel scanPanel = new JPanel( new BorderLayout() );
         scanPanel.setBorder( new TitledBorder( "Scan area" ) );
         scanPanel.add( scanImagePanel );

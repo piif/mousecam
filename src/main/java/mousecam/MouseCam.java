@@ -10,6 +10,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.util.List;
 
 import javax.imageio.ImageIO;
 import javax.swing.JFileChooser;
@@ -25,7 +26,11 @@ public class MouseCam {
 
         final MouseCamWindow frame = new MouseCamWindow();
 
-        frame.setSerialPortsList( SerialUtil.getSerialPorts() );
+        List<String> ports = SerialUtil.getSerialPorts();
+        for (String a : args) {
+        	ports.add(0, a);
+        }
+        frame.setSerialPortsList( ports );
 
         frame.getConnectButton().addActionListener( new ActionListener() {
             @SuppressWarnings( "unused" )
@@ -74,7 +79,7 @@ public class MouseCam {
                     if ( serialPort != null ) {
                         int value = source.getValue();
                         try {
-                            serialPort.getOutputStream().write( 16 - value );
+                            serialPort.getOutputStream().write(value > 9 ? 'a' - 10 + value : value + '0');
                         } catch ( IOException e1 ) {
                             e1.printStackTrace();
                         }

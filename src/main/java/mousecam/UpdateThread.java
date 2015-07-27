@@ -19,19 +19,32 @@ public class UpdateThread extends Thread {
         try {
             InputStream in = serialPort.getInputStream();
             SerialReader reader = new SerialReader( in );
-            int x = 0, y = 0;
+            int x = 1, y = 1;
+//            int x = MouseCamWindow.VIEW_SIZE_X / 2, y = MouseCamWindow.VIEW_SIZE_Y / 2;
             while ( true ) {
                 String line = reader.readLine();
+//                System.out.println(line);
                 if ( line.startsWith( "DELTA:" ) ) {
                     String[] delta = line.substring( 6 ).split( " " );
                     if ( delta.length == 2 ) {
-                        x += Integer.parseInt( delta[0] );
-                        y -= Integer.parseInt( delta[1] );
-                        if ( x < 0 )
+                    	if (MouseCamWindow.REVERSED) {
+	                        x -= (byte)Integer.parseInt( delta[0] );
+	                        y += (byte)Integer.parseInt( delta[1] );
+                    	} else {
+                    		x += (byte)Integer.parseInt( delta[0] );
+	                        y -= (byte)Integer.parseInt( delta[1] );
+                    	}
+                        if ( x < 0 ) {
                             x = 0;
-                        if ( y < 0 )
+                        } else if (x > MouseCamWindow.VIEW_SIZE_X - MouseCamWindow.CAM_SIZE) {
+                        	x = MouseCamWindow.VIEW_SIZE_X - MouseCamWindow.CAM_SIZE - 1;
+                        }
+                        if ( y < 0 ) {
                             y = 0;
-                    }
+                        } else if (y > MouseCamWindow.VIEW_SIZE_Y - MouseCamWindow.CAM_SIZE) {
+                        	y = MouseCamWindow.VIEW_SIZE_Y - MouseCamWindow.CAM_SIZE - 1;
+                        }
+                   }
                 }
                 if ( line.startsWith( "FRAME:" ) ) {
                     imageFromData.setImageData( x, y, parseStringData( line.substring( 6 ) ) );

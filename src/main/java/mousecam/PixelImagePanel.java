@@ -10,71 +10,87 @@ import java.util.Arrays;
 
 import javax.swing.JPanel;
 
+@SuppressWarnings("serial")
 public class PixelImagePanel extends JPanel {
-    private int width = 16;
-    private int height = 16;
-    private Image image;
-    private MemoryImageSource imageSource;
-    private byte[] pixels;
-    private ColorModel colorModel;
+	private int width = 16;
+	private int height = 16;
+	private Image image;
+	private byte[] pixels;
+	private ColorModel colorModel;
 
-    public PixelImagePanel( int width, int height ) {
-        this.width = width;
-        this.height = height;
-        colorModel = buildPalette();
-    }
+	public PixelImagePanel( int width, int height ) {
+		this.width = width;
+		this.height = height;
+		this.pixels = new byte[width * height];
+		colorModel = buildPalette();
+	}
 
-    private ColorModel buildPalette() {
-        byte[] grey = new byte[64];
-        for ( int i = 0; i < 64; i++ ) {
-            grey[i] = (byte) (i * 4);
-        }
-        return new IndexColorModel( 6, 64, grey, grey, grey );
-    }
+	static final int paletteDepth = 7;
+	static final int paletteSize = 1 << paletteDepth;
 
-    @Override
-    protected void paintComponent( Graphics g ) {
-        g.drawImage( getImage(), 0, 0, getWidth(), getHeight(), 0, 0, width, height, this );
-    }
+	private ColorModel buildPalette() {
+		byte[] grey = new byte[paletteSize];
+		for ( int i = 0; i < paletteSize; i++ ) {
+			grey[i] = (byte) (i * 256 / paletteSize);
+		}
+		return new IndexColorModel( paletteDepth, paletteSize, grey, grey, grey );
+	}
 
-    public synchronized Image getImage() {
-        if ( image == null ) {
-            image = Toolkit.getDefaultToolkit().createImage( getImageSource() );
-            image.setAccelerationPriority( 1.0f );
-        }
-        return image;
-    }
+	@Override
+	protected void paintComponent( Graphics g ) {
+		g.drawImage( getImage(), 0, 0, getWidth(), getHeight(), 0, 0, width, height, this );
+	}
 
-    private MemoryImageSource getImageSource() {
-        imageSource = new MemoryImageSource( width, height, colorModel, getPixels(), 0, width );
-        imageSource.setAnimated( true );
-        return imageSource;
-    }
+	public synchronized Image getImage() {
+		if ( image == null ) {
+			MemoryImageSource imageSource =
+					new MemoryImageSource( width, height, colorModel, pixels, 0, width );
+			imageSource.setAnimated( true );
+			image = Toolkit.getDefaultToolkit().createImage( imageSource );
+			image.setAccelerationPriority( 1.0f );
+		}
+		return image;
+	}
 
-    private byte[] getPixels() {
-        if ( pixels == null ) {
-            pixels = new byte[width * height];
-            Arrays.fill( pixels, (byte) 0 );
-        }
-        return pixels;
-    }
-
-    public void setImageData( int x, int y, byte[] newPixels, int newPixelsWidth ) {
-        if ( newPixels != null ) {
-            for ( int i = 0; i < newPixels.length; i++ ) {
-                int trans = 0xFF-((i&0x0F)<<4)-((i&0xF0)>>4); // Do a little transposition to go from chip pixel order to standard pixel order.
-                int destIndex = x + trans % newPixelsWidth + (y + trans / newPixelsWidth) * width;
-                if ( destIndex < getPixels().length  )
-                getPixels()[destIndex] = newPixels[i];
-            }
-        }
-        image = null;
-        getImageSource().newPixels();
-        repaint();
-    }
-    
-    public void clearPixels() {
-        image = null;
-        Arrays.fill( pixels, (byte) 0 );
-    }
+	public void setImageData( int x0, int y0, byte[] newPixels, int newPixelsWidth, boolean reversed ) {
+		// first received byte is bottom right pixel
+		// second one is on top of first, coords maxX, maxY - 1 
+		// => must invert and transpose data
+		if ( newPixels != null ) {
+			// excepted if mouse as component mounted reversed !
+			// => transpose, but don't invert
+			if (reversed) {
+				int x = 0, y = 0;
+				int dst = (y0 + y) * width + (x0 + x);
+				for (int src = 0; src < newPixels.length; src++) {
+					pixels[dst] = (byte) ((newPixels[src] & 0xFF) / (256 / paletteSize));
+					y++;
+					if (y == newPixelsWidth) {
+						y = 0;
+						x++;
+					}
+		   			dst = (y0 + y) * width + (x0 + x);
+				}
+			} else {
+				int x = newPixelsWidth - 1, y = newPixelsWidth - 1;
+				int dst = (y0 + y) * width + (x0 + x);
+				for (int src = 0; src < newPixels.length; src++) {
+					pixels[dst] = (byte) ((newPixels[src] & 0xFF) / (256 / paletteSize));
+					y--;
+					if (y < 0) {
+						y = newPixelsWidth - 1;
+						x--;
+					}
+		   			dst = (y0 + y) * width + (x0 + x);
+				}
+			}
+	   }
+		image = null;
+		repaint();
+	}
+	
+	public void clearPixels() {
+		image = null;
+		Arrays.fill( pixels, (byte) 0 );
+	}
 }

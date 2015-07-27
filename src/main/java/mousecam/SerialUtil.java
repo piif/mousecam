@@ -29,7 +29,8 @@ public class SerialUtil {
         try {
             portIdentifier = CommPortIdentifier.getPortIdentifier( portName );
         } catch ( NoSuchPortException e ) {
-            throw new IllegalArgumentException( portName + " port not found. Check that it is corect and that the board is plugged in !", e );
+            System.out.println("NoSuchPortException " + e);
+            throw new IllegalArgumentException( portName + " port not found. Check that it is correct and that the board is plugged in !", e );
         }
         if ( portIdentifier.getPortType() != CommPortIdentifier.PORT_SERIAL ) {
             throw new IllegalArgumentException( portName + " is not a serial port." );
