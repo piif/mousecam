@@ -11,9 +11,21 @@
 	#define DEFAULT_BAUDRATE 115200
 #endif
 
+// on ADNS5020EN
+// 1    SDIO      Serial Port Data Input and Output
+// 2    XY_LED    LED Control
+// 3    NRESET    Reset Pin (active low input)
+// 4    NCS       Chip Select (active low input)
+// 5    VDD5      Supply Voltage
+// 6    GND       Ground
+// 7    REGO      Regulator Output
+// 8    SCLK      Serial Clock Input
+
+
 #define SCLK 2
 #define SDIO 3
-#define PD 4
+#define NCS 4
+#define NRESET 5
 
 #define REG_PRODUCT_ID 0x00
 #define REG_REVISION_ID 0x01
@@ -21,21 +33,33 @@
 #define REG_DELTA_X 0x03
 #define REG_DELTA_Y 0x04
 #define REG_SQUAL 0x05
-#define REG_AVERAGE_PIXEL 0x06
-#define REG_MAXIMUM_PIXEL 0x07
-#define REG_CONFIG_BITS 0x0A
-#define REG_DATA_OUT_LOWER 0x0C
-#define REG_DATA_OUT_UPPER 0x0D
-#define REG_SHUTTER_LOWER 0x0E
-#define REG_SHUTTER_UPPER 0x0F
-#define REG_FRAME_PERIOD_LOWER 0x10
-#define REG_FRAME_PERIOD_UPPER 0x11
+#define REG_SHUTTER_LOWER 0x06
+#define REG_SHUTTER_UPPER 0x07
+#define REG_MAXIMUM_PIXEL 0x08
+#define REG_SUM_PIXEL 0x09
+#define REG_MINIMUM_PIXEL 0x0A
+#define REG_PIXEL_GRAB 0x0B
+// 0C reserved
+#define REG_MOUSE_CONTROL 0x0D
+// 0E-39 reserved
+#define REG_CHIP_RESET 0x3A
+// 3B-3E reserved
+#define REG_INV_REV_ID 0x3F
+// 40-62 reserved
+#define REG_MOTION_BURST 0x63
 
-int dumpWidth = 256; // Number of pixels to read for each frame.
-byte frame[256];
+#define MAP_SIZE (15*15)
 
+int dumpWidth = 0; // Number of pixels to read for each frame.
+byte frame[MAP_SIZE];
+
+// TODO : refaire ça en manipulant les registres en direct
+// pour avoir un timing constant et donc connu
+// idéalement, le refaire en assembleur en s'inspirant de la lib LEDMatrix ?
 byte readRegister(byte address) {
 	pinMode(SDIO, OUTPUT);
+	digitalWrite(NCS, LOW);
+	delayMicroseconds(1);
 
 	for (byte i = 128; i > 0; i >>= 1) {
 		digitalWrite(SCLK, LOW);
@@ -55,10 +79,17 @@ byte readRegister(byte address) {
 			res |= i;
 	}
 
+	delayMicroseconds(100); // tSWW, tSWR = 100us min.
+//	delayMicroseconds(1);
+	digitalWrite(NCS, HIGH);
+
 	return res;
 }
 
 void writeRegister(byte address, byte data) {
+	digitalWrite(NCS, LOW);
+	delayMicroseconds(1);
+
 	address |= 0x80; // MSB indicates write mode.
 	pinMode(SDIO, OUTPUT);
 
@@ -75,34 +106,30 @@ void writeRegister(byte address, byte data) {
 	}
 
 	delayMicroseconds(100); // tSWW, tSWR = 100us min.
+//	delayMicroseconds(1);
+	digitalWrite(NCS, HIGH);
 }
 
 void reset() {
-	pinMode(SCLK, OUTPUT);
-	pinMode(SDIO, INPUT);
-	pinMode(PD, OUTPUT);
-	digitalWrite(SCLK, LOW);
-	digitalWrite(PD, HIGH);
+//	pinMode(SCLK, OUTPUT);
+//	pinMode(SDIO, INPUT);
+//	digitalWrite(SCLK, LOW);
+	digitalWrite(NRESET, LOW);
 	delayMicroseconds(1);
-	digitalWrite(PD, LOW);
+	digitalWrite(NRESET, HIGH);
 }
 
 void dumpFrame() {
-	byte config = readRegister(REG_CONFIG_BITS);
-	config |= B00001000; // PixDump
-	writeRegister(REG_CONFIG_BITS, config);
+	writeRegister(REG_PIXEL_GRAB, 42);
 
 	int count = 0;
 	do {
-		byte data = readRegister(REG_DATA_OUT_LOWER);
-		if ((data & 0x80) == 0) { // Data is valid
+		byte data = readRegister(REG_PIXEL_GRAB);
+		if ((data & 0x80) != 0) { // Data is valid
 			frame[count++] = data;
 		}
 	} while (count != dumpWidth);
-
-	config = readRegister(REG_CONFIG_BITS);
-	config &= B11110111;
-	writeRegister(REG_CONFIG_BITS, config);
+// TODO : faire une somme et en déduire un niveau de gris global à dumper à part
 
 	Serial.print("FRAME:");
 	for (int i = 0; i < dumpWidth; i++) {
@@ -117,6 +144,10 @@ void dumpFrame() {
 void setup() {
 	Serial.begin(DEFAULT_BAUDRATE);
 
+	pinMode(SCLK, OUTPUT);
+	pinMode(NRESET, OUTPUT);
+	pinMode(NCS, OUTPUT);
+
 	reset();
 	byte productId = readRegister(REG_PRODUCT_ID);
 	byte revisionId = readRegister(REG_REVISION_ID);
@@ -127,26 +158,34 @@ void setup() {
 	Serial.println(
 			productId == 0x02 ? " OK." : " Unknown productID. Carry on.");
 
-	byte config = readRegister(REG_CONFIG_BITS);
-	config |= B00000001; // Don't sleep (LED always powered on).
-	writeRegister(REG_CONFIG_BITS, config);
 }
 
 void loop() {
 	// Allows to set the dump window by sending the number of lines to read via the serial port.
 	if (Serial.available() > 0) {
-		dumpWidth = 16 * Serial.read();
-		dumpWidth = constrain(dumpWidth, 0, 256);
+		int c = Serial.read();
+		if (c >= '0' && c <= '9') {
+			c = c - '0';
+			dumpWidth = 15 * c;
+		} else if (c >= 'a' && c <= 'f') {
+			c = c - 'a' + 10;
+			dumpWidth = 15 * c;
+		}
 	}
 
-	readRegister(REG_MOTION); // Freezes DX and DY until they are read or MOTION is read again.
-	char dx = readRegister(REG_DELTA_X);
-	char dy = readRegister(REG_DELTA_Y);
-	Serial.print("DELTA:");
-	Serial.print(dx, DEC);
-	Serial.print(" ");
-	Serial.println(dy, DEC);
 
-	if (dumpWidth > 0)
+	if (dumpWidth > 0) {
 		dumpFrame();
+	}
+	if (readRegister(REG_MOTION) & 0x80) {
+		char dx = readRegister(REG_DELTA_X);
+		char dy = readRegister(REG_DELTA_Y);
+		writeRegister(REG_MOTION, 0);
+		if (dx != 0 || dy != 0) {
+			Serial.print("DELTA:");
+			Serial.print(dx, DEC);
+			Serial.print(" ");
+			Serial.println(dy, DEC);
+		}
+	}
 }
