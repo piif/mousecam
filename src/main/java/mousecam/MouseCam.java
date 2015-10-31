@@ -1,3 +1,5 @@
+// TODO : add RGB LED buttons (sliders ?) + protocol to arduino (L prefix + 3*2 hex digits for r,g,b)
+
 package mousecam;
 
 import gnu.io.SerialPort;
@@ -10,6 +12,7 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
+import java.io.OutputStream;
 import java.util.List;
 
 import javax.imageio.ImageIO;
@@ -22,9 +25,27 @@ import javax.swing.event.ChangeListener;
 public class MouseCam {
     private static SerialPort serialPort;
 
-    public static void main( String[] args ) throws Exception {
+    static char toHex(byte value) {
+    	return (char)(value > 9 ? 'a' - 10 + value : value + '0');
+    }
 
-        final MouseCamWindow frame = new MouseCamWindow();
+    public static class LedPilot {
+    	void set(short r, short g, short b) throws IOException {
+    		OutputStream out = serialPort.getOutputStream();
+    		out.write('L');
+        	out.write(toHex((byte)(r >> 4)));
+        	out.write(toHex((byte)(r & 0x0f)));
+        	out.write(toHex((byte)(g >> 4)));
+        	out.write(toHex((byte)(g & 0x0f)));
+        	out.write(toHex((byte)(b >> 4)));
+        	out.write(toHex((byte)(b & 0x0f)));
+    	}
+    }
+
+    public static void main( String[] args ) throws Exception {
+    	LedPilot ledPilot = new LedPilot();
+
+        final MouseCamWindow frame = new MouseCamWindow(ledPilot);
 
         List<String> ports = SerialUtil.getSerialPorts();
         for (String a : args) {
@@ -33,7 +54,6 @@ public class MouseCam {
         frame.setSerialPortsList( ports );
 
         frame.getConnectButton().addActionListener( new ActionListener() {
-            @SuppressWarnings( "unused" )
             public void actionPerformed( ActionEvent e ) {
                 try {
                     MouseCam.createUpdateThread( frame, frame.getSelectedPort() );
@@ -45,7 +65,6 @@ public class MouseCam {
         } );
 
         frame.getClearButton().addActionListener( new ActionListener() {
-            @SuppressWarnings( "unused" )
             public void actionPerformed( ActionEvent e ) {
                 frame.getScanImagePanel().clearPixels();
                 frame.getScanImagePanel().repaint();
@@ -53,7 +72,6 @@ public class MouseCam {
         } );
 
         frame.getSaveButton().addActionListener( new ActionListener() {
-            @SuppressWarnings( "unused" )
             public void actionPerformed( ActionEvent e ) {
                 JFileChooser fc = new JFileChooser();
                 int returnVal = fc.showSaveDialog( frame );
@@ -77,9 +95,11 @@ public class MouseCam {
                 JSlider source = (JSlider) e.getSource();
                 if ( !source.getValueIsAdjusting() ) {
                     if ( serialPort != null ) {
-                        int value = source.getValue();
+                        byte value = (byte)source.getValue();
                         try {
-                            serialPort.getOutputStream().write(value > 9 ? 'a' - 10 + value : value + '0');
+                        	// TODO : prefix by W
+                        	serialPort.getOutputStream().write('W');
+                            serialPort.getOutputStream().write(toHex(value));
                         } catch ( IOException e1 ) {
                             e1.printStackTrace();
                         }
@@ -90,7 +110,6 @@ public class MouseCam {
 
         frame.addWindowListener( new WindowAdapter() {
             @Override
-            @SuppressWarnings( "unused" )
             public void windowClosing( WindowEvent e ) {
                 System.exit( 0 );
             }
